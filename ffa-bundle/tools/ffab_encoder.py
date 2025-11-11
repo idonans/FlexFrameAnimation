@@ -30,8 +30,19 @@ FFAB_VERSION_0x0001 = 0x0001
 # ASTC 压缩格式及对应的编码映射
 ASTC_FORMAT_CODES = {
     '4x4': 0x0001,
-    '6x6': 0x0002,
-    '8x8': 0x0003
+    '5x4': 0x0002,
+    '5x5': 0x0003,
+    '6x5': 0x0004,
+    '6x6': 0x0005,
+    '8x5': 0x0006,
+    '8x6': 0x0007,
+    '8x8': 0x0008,
+    '10x5': 0x0009,
+    '10x6': 0x000A,
+    '10x8': 0x000B,
+    '10x10': 0x000C,
+    '12x10': 0x000D,
+    '12x12': 0x000E
 }
 
 # ASTC 图像输出质量
@@ -78,26 +89,26 @@ def compress_with_astc(img_data: np.ndarray, astc_format: str) -> bytes:
 
     Args:
         img_data: 图片数据
-        astc_format: ASTC格式 (4x4, 6x6, 8x8)
+        astc_format: ASTC格式 (4x4, 5x4, 5x5, 6x5, 6x6, 8x5, 8x6, 8x8, 10x5, 10x6, 10x8, 10x10, 12x10, 12x12)
 
     Returns:
         压缩后的数据
     """
-    # 创建临时文件
-    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as input_file:
-        # 将numpy数组转换为PIL图像并保存为PNG
+    # 创建临时工作文件夹
+    with tempfile.TemporaryDirectory(prefix='ffab_') as temp_dir:
+        # 将 img_data 转换为 PIL 图像并保存到 input.png 文件
+        input_path = os.path.join(temp_dir, 'input.png')
         img = Image.fromarray(img_data)
-        img.save(input_file.name, 'PNG')
-        input_path = input_file.name
+        img.save(input_path, 'PNG')
 
-    # 创建输出文件路径
-    output_path = input_path + '.astc'
+        # 使用 astcenc 编码器压缩 input.png 文件
+        output_path = os.path.join(temp_dir, 'output.astc')
 
-    try:
         # 构建ASTC编码命令
+        # -cl compress with linear LDR
         cmd = [
             'astcenc',
-            '-cl', input_path, output_path, astc_format,
+            '-cl', 'c', input_path, output_path, astc_format,
             '-' + ASTC_QUALITY
         ]
 
@@ -110,20 +121,12 @@ def compress_with_astc(img_data: np.ndarray, astc_format: str) -> bytes:
         if result.returncode != 0:
             raise RuntimeError(f"ASTC编码失败: {result.stderr}")
 
-        # 读取压缩后的数据
+        # 读取 output.astc 文件内容，作为压缩后的数据返回
         with open(output_path, 'rb') as f:
             compressed_data = f.read()
 
         return compressed_data
-
-    finally:
-        # 清理临时文件
-        try:
-            os.unlink(input_path)
-            if os.path.exists(output_path):
-                os.unlink(output_path)
-        except:
-            pass
+    # 临时工作文件夹会在 with 块结束后自动清理
 
 
 def load_images_from_folder(folder_path: str) -> List[Tuple[str, np.ndarray]]:
@@ -208,7 +211,7 @@ def create_ffab_file_v1(images: List[Tuple[str, np.ndarray]], output_path: str, 
     Args:
         images: 图片列表
         output_path: 输出文件路径
-        astc_format: ASTC格式 (4x4, 6x6, 8x8)
+        astc_format: ASTC格式 (4x4, 5x4, 5x5, 6x5, 6x6, 8x5, 8x6, 8x8, 10x5, 10x6, 10x8, 10x10, 12x10, 12x12)
     """
     if not images:
         raise ValueError("没有可用的图片")
@@ -288,7 +291,7 @@ def main():
     parser = argparse.ArgumentParser(description='FFAB编码工具 - 将图片序列编码成FFAB格式')
     parser.add_argument('input_folder', help='包含PNG或JPEG图片的输入文件夹')
     parser.add_argument('output_file', help='输出的FFAB文件路径')
-    parser.add_argument('--format', choices=['4x4', '6x6', '8x8'], default='6x6',
+    parser.add_argument('--format', choices=list(ASTC_FORMAT_CODES.keys()), default='6x6',
                        help='ASTC压缩格式 (默认: 6x6)')
 
     args = parser.parse_args()
