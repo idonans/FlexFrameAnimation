@@ -12,9 +12,13 @@ import shutil
 import sys
 import subprocess
 from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 sys.path.append(str(Path(__file__).parent.parent))
 from ffab_encoder import ASTC_FORMAT_CODES
+
+# 测试视频提取帧率
+EXTRACT_FRAMES_FPS = 24
 
 def run_command(command, cwd=None):
     """运行命令并返回结果"""
@@ -75,7 +79,7 @@ def reset_directories():
     return tools_dir, frames_dir, ffab_dir
 
 
-def extract_frames(video_path, frames_dir, fps=30):
+def extract_frames(video_path, frames_dir):
     """使用 ffmpeg 提取视频帧"""
     if not Path(video_path).exists():
         print(f"错误：视频文件不存在: {video_path}")
@@ -85,7 +89,7 @@ def extract_frames(video_path, frames_dir, fps=30):
     command = [
         'ffmpeg',
         '-i', str(video_path),
-        '-vf', f'fps={fps}',
+        '-vf', f'fps={EXTRACT_FRAMES_FPS}',
         '-q:v', '2',  # 高质量输出
         str(frames_dir / 'frame_%04d.png')
     ]
@@ -152,21 +156,40 @@ def main():
 
     # 提取视频帧
     print("\n=== 开始提取视频帧 ===")
-    if not extract_frames(video_path, frames_dir, fps=30):
+    if not extract_frames(video_path, frames_dir):
         return 1
 
     # 测试所有 ASTC 格式
-    print("\n=== 开始测试所有 ASTC 格式 ===")
+    print("\n=== 开始并行测试所有 ASTC 格式 ===")
     success_count = 0
     failed_formats = []
 
-    # 按照从 4x4 到 12x12 的顺序测试所有格式
-    for astc_format in sorted(ASTC_FORMAT_CODES.keys()):
-        print(f"\n测试 {astc_format} 格式...")
-        if encode_to_ffab(tools_dir, frames_dir, ffab_dir, astc_format):
-            success_count += 1
-        else:
-            failed_formats.append(astc_format)
+    # 准备所有要处理的格式
+    formats_to_test = sorted(ASTC_FORMAT_CODES.keys())
+    print(f"将并行处理 {len(formats_to_test)} 种 ASTC 格式")
+
+    # 使用进程池并行执行编码任务
+    # max_workers 可以根据CPU核心数调整，默认使用所有可用核心
+    with ProcessPoolExecutor() as executor:
+        # 提交所有编码任务
+        future_to_format = {}
+        for astc_format in formats_to_test:
+            print(f"提交任务: {astc_format} 格式")
+            future = executor.submit(encode_to_ffab, tools_dir, frames_dir, ffab_dir, astc_format)
+            future_to_format[future] = astc_format
+
+        # 收集所有任务的结果
+        for future in as_completed(future_to_format):
+            astc_format = future_to_format[future]
+            try:
+                success = future.result()
+                if success:
+                    success_count += 1
+                else:
+                    failed_formats.append(astc_format)
+            except Exception as e:
+                print(f"处理 {astc_format} 格式时出错: {str(e)}")
+                failed_formats.append(astc_format)
 
     # 输出测试结果摘要
     print("\n=== 测试结果摘要 ===")

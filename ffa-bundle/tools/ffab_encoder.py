@@ -47,7 +47,7 @@ ASTC_FORMAT_CODES = {
 
 # ASTC 图像输出质量
 # 可选值有 fast, medium, thorough, exhaustive
-ASTC_QUALITY = 'exhaustive'
+ASTC_QUALITY = 'fast'
 
 # 支持的图片格式
 SUPPORTED_FORMATS = ('.png', '.jpg', '.jpeg')
@@ -108,7 +108,7 @@ def compress_with_astc(img_data: np.ndarray, astc_format: str) -> bytes:
         # -cl compress with linear LDR
         cmd = [
             'astcenc',
-            '-cl', 'c', input_path, output_path, astc_format,
+            '-cl', input_path, output_path, astc_format,
             '-' + ASTC_QUALITY
         ]
 
