@@ -25,7 +25,6 @@ except ImportError as e:
 
 # FFAB 文件格式常量
 FFAB_MAGIC = 0xFFAB
-FFAB_VERSION_0x0001 = 0x0001
 
 # ASTC 压缩格式及对应的编码映射
 ASTC_FORMAT_CODES = {
@@ -201,7 +200,7 @@ def check_images_dimensions(images: List[Tuple[str, np.ndarray]]) -> Tuple[int, 
         if h != height or w != width:
             raise ValueError(f"图片尺寸不一致: {first_img_name} ({width}x{height}) vs {img_name} ({w}x{h})")
 
-    return (width, height)
+    return width, height
 
 
 def create_ffab_file_v1(images: List[Tuple[str, np.ndarray]], output_path: str, astc_format: str) -> None:
@@ -223,7 +222,7 @@ def create_ffab_file_v1(images: List[Tuple[str, np.ndarray]], output_path: str, 
     astc_format_code = get_astc_format_code(astc_format)
 
     # 准备文件头（使用大端序）
-    header = struct.pack('>HH', FFAB_MAGIC, FFAB_VERSION_0x0001)
+    header = struct.pack('>HH', FFAB_MAGIC, 0x0001)
 
     # 准备Meta信息区（使用大端序）
     image_count = len(images)
@@ -280,6 +279,7 @@ def create_ffab_file_v1(images: List[Tuple[str, np.ndarray]], output_path: str, 
     file_size = os.path.getsize(output_path)
     print(f"\nFFAB文件创建成功:")
     print(f"  输出文件: {output_path}")
+    print(f"  ffab 版本: 0x0001")
     print(f"  图片数量: {image_count}")
     print(f"  图片尺寸: {width}x{height}")
     print(f"  ASTC格式: {astc_format}")
