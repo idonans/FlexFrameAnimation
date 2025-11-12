@@ -28,7 +28,7 @@ except ImportError as e:
 FFAB_MAGIC = 0xFFAB
 FFAB_VERSION_0x0001 = 0x0001
 
-# ASTC 压缩格式及对应的编码映射（与encoder保持一致）
+# ASTC 压缩格式及对应的编码映射
 ASTC_FORMAT_CODES = {
     '4x4': 0x0001,
     '5x4': 0x0002,
@@ -51,6 +51,45 @@ ASTC_CODE_TO_FORMAT = {v: k for k, v in ASTC_FORMAT_CODES.items()}
 
 # 输出图片格式
 OUTPUT_FORMAT = 'PNG'
+
+
+def generate_astc_header(width: int, height: int, astc_format: str) -> bytes:
+    """
+    生成ASTC文件头(16字节)
+    ```
+    struct astc_header
+    {
+        uint8_t magic[4];
+        uint8_t block_x;
+        uint8_t block_y;
+        uint8_t block_z;
+        uint8_t dim_x[3];
+        uint8_t dim_y[3];
+        uint8_t dim_z[3];
+    }
+    ```
+
+    Args:
+        width: 图片宽度
+        height: 图片高度
+        astc_format: ASTC格式 (4x4, 5x4, 5x5, 6x5, 6x6, 8x5, 8x6, 8x8, 10x5, 10x6, 10x8, 10x10, 12x10, 12x12)
+
+    Returns:
+        ASTC文件头数据
+    """
+    # 从 astc_format 中拆解 block_x 与 block_y
+    # 注意：二维图片中，block_z 固定为 1，dim_z 固定为 1
+    block_x, block_y = map(int, astc_format.split('x'))
+
+    # 构建ASTC文件头（使用大端序）
+    header = struct.pack('>4BBBB3B3B3B',
+                         0x13, 0xAB, 0xA1, 0x5C,
+                         block_x, block_y, 1,
+                         width & 0xFF, (width >> 8) & 0xFF, (width >> 16) & 0xFF,
+                         height & 0xFF, (height >> 8) & 0xFF, (height >> 16) & 0xFF,
+                         1, 0, 0)
+
+    return header
 
 
 def check_astc_decoder() -> bool:
@@ -78,11 +117,15 @@ def decode_astc_data(compressed_data: bytes, width: int, height: int, astc_forma
     Returns:
         解码后的numpy数组图像数据
     """
+    # 生成ASTC文件头（16字节）
+    astc_header = generate_astc_header(width, height, astc_format)
+
     # 创建临时工作文件夹
     with tempfile.TemporaryDirectory(prefix='ffab_') as temp_dir:
-        # 将压缩数据写入临时文件
+        # 将压缩数据写入临时文件，先写入ASTC头部，再写入压缩数据
         astc_path = os.path.join(temp_dir, 'input.astc')
         with open(astc_path, 'wb') as f:
+            f.write(astc_header)
             f.write(compressed_data)
 
         # 解码后的输出路径
@@ -92,7 +135,7 @@ def decode_astc_data(compressed_data: bytes, width: int, height: int, astc_forma
         # -dl decompress with linear LDR
         cmd = [
             'astcenc',
-            '-dl', astc_path, output_path, astc_format
+            '-dl', astc_path, output_path
         ]
 
         # 执行ASTC解码

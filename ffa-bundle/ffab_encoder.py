@@ -23,10 +23,10 @@ except ImportError as e:
     print("请运行: pip install pillow numpy")
     sys.exit(1)
 
-# FFAB 文件格式常量
+# FFAB 文件头魔数
 FFAB_MAGIC = 0xFFAB
 
-# ASTC 压缩格式及对应的编码映射
+# astc 压缩格式定义与对应的编码映射，压缩格式同时匹配 astc block size (blockdim) 定义
 ASTC_FORMAT_CODES = {
     '4x4': 0x0001,
     '5x4': 0x0002,
@@ -43,10 +43,6 @@ ASTC_FORMAT_CODES = {
     '12x10': 0x000D,
     '12x12': 0x000E
 }
-
-# ASTC 图像输出质量
-# 可选值有 fast, medium, thorough, exhaustive
-ASTC_QUALITY = 'fast'
 
 # 支持的图片格式
 SUPPORTED_FORMATS = ('.png', '.jpg', '.jpeg')
@@ -82,13 +78,14 @@ def get_astc_format_code(format_name: str) -> int:
         raise ValueError(f"无效的ASTC格式: {format_name}")
 
 
-def compress_with_astc(img_data: np.ndarray, astc_format: str) -> bytes:
+def compress_with_astc(img_data: np.ndarray, astc_format: str, quality: float) -> bytes:
     """
     使用ASTC编码器压缩图片
 
     Args:
         img_data: 图片数据
-        astc_format: ASTC格式 (4x4, 5x4, 5x5, 6x5, 6x6, 8x5, 8x6, 8x8, 10x5, 10x6, 10x8, 10x10, 12x10, 12x12)
+        astc_format: ASTC压缩格式 (4x4, 5x4, 5x5, 6x5, 6x6, 8x5, 8x6, 8x8, 10x5, 10x6, 10x8, 10x10, 12x10, 12x12)
+        quality: 压缩质量 (0.0 - 100.0)
 
     Returns:
         压缩后的数据
@@ -104,11 +101,10 @@ def compress_with_astc(img_data: np.ndarray, astc_format: str) -> bytes:
         output_path = os.path.join(temp_dir, 'output.astc')
 
         # 构建ASTC编码命令
-        # -cl compress with linear LDR
         cmd = [
             'astcenc',
             '-cl', input_path, output_path, astc_format,
-            '-' + ASTC_QUALITY
+            str(quality)
         ]
 
         # 执行ASTC编码
@@ -118,7 +114,7 @@ def compress_with_astc(img_data: np.ndarray, astc_format: str) -> bytes:
                                text=True)
 
         if result.returncode != 0:
-            raise RuntimeError(f"ASTC编码失败: {result.stderr}")
+            raise RuntimeError(f"ASTC编码失败: {result.stderr} ${result.stdout}")
 
         # 读取 output.astc 文件内容，作为压缩后的数据返回
         with open(output_path, 'rb') as f:
@@ -203,14 +199,59 @@ def check_images_dimensions(images: List[Tuple[str, np.ndarray]]) -> Tuple[int, 
     return width, height
 
 
-def create_ffab_file_v1(images: List[Tuple[str, np.ndarray]], output_path: str, astc_format: str) -> None:
+def generate_astc_header(width: int, height: int, astc_format: str) -> bytes:
+    """
+    生成ASTC文件头(16字节)
+    ```
+    struct astc_header
+    {
+        uint8_t magic[4];
+        uint8_t block_x;
+        uint8_t block_y;
+        uint8_t block_z;
+        uint8_t dim_x[3];
+        uint8_t dim_y[3];
+        uint8_t dim_z[3];
+    }
+    ```
+
+    Args:
+        width: 图片宽度
+        height: 图片高度
+        astc_format: ASTC格式 (4x4, 5x4, 5x5, 6x5, 6x6, 8x5, 8x6, 8x8, 10x5, 10x6, 10x8, 10x10, 12x10, 12x12)
+
+    Returns:
+        ASTC文件头数据
+    """
+    # 从 astc_format 中拆解 block_x 与 block_y
+    # 注意：二维图片中，block_z 固定为 1，dim_z 固定为 1
+    block_x, block_y = map(int, astc_format.split('x'))
+
+    # 构建ASTC文件头（使用大端序）
+    header = struct.pack('>4BBBB3B3B3B',
+                         0x13, 0xAB, 0xA1, 0x5C,
+                         block_x, block_y, 1,
+                         width & 0xFF, (width >> 8) & 0xFF, (width >> 16) & 0xFF,
+                         height & 0xFF, (height >> 8) & 0xFF, (height >> 16) & 0xFF,
+                         1, 0, 0)
+
+    return header
+
+
+def create_ffab_file_v1(images: List[Tuple[str, np.ndarray]], output_path: str, astc_format: str, quality: float) -> None:
     """
     创建FFAB文件 (版本1)
+    `版本1 (0x0001) 定义内容概括：
+    1. 文件头(4字节):FFAB_MAGIC (0xFFAB) + 版本号(0x0001)
+    2. Meta信息区(8字节):图片数量(2字节) + 图片宽度(2字节) + 图片高度(2字节) + ASTC格式代码(2字节)
+    3. 索引表(每项12字节):每个索引项包含数据偏移量(8字节) + 数据长度(4字节)
+    4. 数据区:连续存储所有图片的ASTC压缩数据, 不包括 astc header (16字节)
 
     Args:
         images: 图片列表
         output_path: 输出文件路径
         astc_format: ASTC格式 (4x4, 5x4, 5x5, 6x5, 6x6, 8x5, 8x6, 8x8, 10x5, 10x6, 10x8, 10x10, 12x10, 12x12)
+        quality: ASTC压缩质量 (0.0-100.0)
     """
     if not images:
         raise ValueError("没有可用的图片")
@@ -221,7 +262,7 @@ def create_ffab_file_v1(images: List[Tuple[str, np.ndarray]], output_path: str, 
     # 获取ASTC格式代码
     astc_format_code = get_astc_format_code(astc_format)
 
-    # 准备文件头（使用大端序）
+    # 准备文件头（使用大端序），当前为版本0x0001
     header = struct.pack('>HH', FFAB_MAGIC, 0x0001)
 
     # 准备Meta信息区（使用大端序）
@@ -238,10 +279,23 @@ def create_ffab_file_v1(images: List[Tuple[str, np.ndarray]], output_path: str, 
 
     current_offset = data_start_offset
 
+    # 根据 meta 信息生成 `.astc` header 的内容(16字节)
+    astc_header = generate_astc_header(width, height, astc_format)
+
     # 处理每张图片
     for img_name, img_data in images:
         # 使用ASTC编码器压缩图片
-        compressed_data = compress_with_astc(img_data, astc_format)
+        astc_compressed_data = compress_with_astc(img_data, astc_format, quality)
+
+        # 对比压缩数据的前 16 个字节是否与 astc_header 相同
+        # https://github.com/ARM-software/astc-encoder/blob/main/Docs/FileFormat.md
+        # .astc 文件的前 16 个字节是文件头
+        if astc_compressed_data[:16] != astc_header:
+            raise ValueError(f"图片 {img_name} 的 ASTC 压缩数据前 16 个字节与 astc_header 不匹配")
+
+        # 记录实际压缩数据（不包括 astc header）
+        compressed_data = astc_compressed_data[16:]
+
         data_length = len(compressed_data)
 
         # 添加索引项（使用大端序）
@@ -293,6 +347,8 @@ def main():
     parser.add_argument('output_file', help='输出的FFAB文件路径')
     parser.add_argument('--format', choices=list(ASTC_FORMAT_CODES.keys()), default='6x6',
                        help='ASTC压缩格式 (默认: 6x6)')
+    parser.add_argument('--quality', type=float, default=50,
+                       help='ASTC压缩质量 (0.0-100.0, 默认: 50)')
 
     args = parser.parse_args()
 
@@ -306,13 +362,18 @@ def main():
         # 校验ASTC格式
         astc_format = check_astc_format(args.format)
 
+        # 校验ASTC质量
+        if not (0 <= args.quality <= 100):
+            print("错误：ASTC质量必须在0-100之间")
+            sys.exit(1)
+
         # 加载图片
         print(f"正在从文件夹加载图片: {args.input_folder}")
         images = load_images_from_folder(args.input_folder)
 
         # 创建FFAB文件
         print(f"\n正在创建FFAB文件: {args.output_file}")
-        create_ffab_file_v1(images, args.output_file, astc_format)
+        create_ffab_file_v1(images, args.output_file, astc_format, args.quality)
     except Exception as e:
         print(f"错误: {e}")
         sys.exit(1)

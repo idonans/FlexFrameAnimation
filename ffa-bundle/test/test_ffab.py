@@ -29,11 +29,14 @@ from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from PIL import Image
 
-sys.path.append(str(Path(__file__).parent.parent))
-from ffab_encoder import ASTC_FORMAT_CODES
-
 # 测试视频提取帧率
 EXTRACT_FRAMES_FPS = 24
+
+# 测试 ASTC 格式列表
+ASTC_FORMATS = ['4x4', '6x6', '8x8', '12x12']
+
+# 测试压缩质量
+ASTC_QUALITY = 100.0
 
 def run_command(command, cwd=None):
     """运行命令并返回结果"""
@@ -143,7 +146,8 @@ def encode_to_ffab(tools_dir: Path, input_dir: Path, output_dir: Path, astc_form
         str(encoder_script),
         str(input_dir),
         str(output_file),
-        '--format', astc_format
+        '--format', astc_format,
+        '--quality', str(ASTC_QUALITY)
     ]
 
     success = run_command(command)
@@ -180,9 +184,9 @@ def decode_from_ffab(tools_dir: Path, ffab_file: Path, output_dir: Path) -> bool
 
 def compare_frames(original_dir: Path, decoded_dir: Path) -> bool:
     """对比原始帧和解码后的帧，检查数量和分辨率是否一致"""
-    # 获取目录下的全部文件列表，不要过滤文件名与文件格式，也不要排序
-    original_files = list(original_dir.glob('*'))
-    decoded_files = list(decoded_dir.glob('*'))
+    # 获取目录下的全部文件列表，不要过滤文件名与文件格式
+    original_files = sorted(list(original_dir.glob('*')))
+    decoded_files = sorted(list(decoded_dir.glob('*')))
 
     # 检查文件数量是否一致
     if len(original_files) != len(decoded_files):
@@ -229,7 +233,7 @@ def process_video(tools_dir: Path, video_path: Path, build_dir: Path):
     failed_formats = []
 
     # 准备所有要处理的格式
-    formats_to_test = sorted(ASTC_FORMAT_CODES.keys())
+    formats_to_test = ASTC_FORMATS
     print(f"将并行处理 {len(formats_to_test)} 种 ASTC 格式")
 
     # 使用进程池并行执行编码任务
