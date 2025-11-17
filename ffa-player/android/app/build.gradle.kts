@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "io.github.idonans.ffa"
+    namespace = "io.github.idonans.ffa.example"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.github.idonans.ffa"
+        applicationId = "io.github.idonans.ffa.example"
         minSdk = 28
         targetSdk = 36
         versionCode = 1
@@ -40,6 +40,10 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
+    implementation(libs.androidx.constraintlayout)
+    implementation(libs.androidx.lifecycle.livedata.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.fragment.ktx)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
