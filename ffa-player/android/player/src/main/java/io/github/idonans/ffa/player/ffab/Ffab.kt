@@ -1,8 +1,11 @@
 package io.github.idonans.ffa.player.ffab
 
 import android.content.Context
-import android.content.res.AssetFileDescriptor
 import android.content.res.Configuration
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.MappedByteBuffer
+import java.nio.channels.FileChannel
 
 /**
  * 解析 `.ffab` 文件
@@ -22,7 +25,7 @@ class Ffab(private val ffabRawResId: Int) {
     companion object {
         // FFAB 文件格式常量
         private const val FFAB_MAGIC = 0xFFAB
-        private const val FFAB_VERSION_0x0001 = 0x0001
+        private const val FFAB_VERSION_0X0001 = 0x0001
 
         // 压缩格式代码到 astc block 的映射
         private val CODE_TO_ASTC_BLOCK = mapOf(
@@ -43,66 +46,41 @@ class Ffab(private val ffabRawResId: Int) {
         )
 
         /**
-         * 从字节数组中解析大端序的8位无符号整数
-         * @param bytes 字节数组
-         * @param offset 起始偏移量
-         * @return 解析出的整数 (0-255)
+         * 从 buffer 中读取接下来的 2 个字节，并解析为 16 位无符号整数
+         * @return 解析出的整数 (0-0xFFFF)
          */
-        private fun readUint8(bytes: ByteArray, offset: Int = 0): Int {
-            return bytes[offset].toInt() and 0xFF
+        private fun ByteBuffer.readUint16(): UShort {
+            return this.short.toUShort()
         }
 
         /**
-         * 从字节数组中解析大端序的16位无符号整数
-         * @param bytes 字节数组
-         * @param offset 起始偏移量
-         * @return 解析出的整数 (0-65535)
+         * 从 buffer 中读取接下来的 4 个字节，并解析为 32 位无符号整数
+         * @return 解析出的整数 (0-0xFFFFFFFF)
          */
-        private fun readUint16(bytes: ByteArray, offset: Int = 0): Int {
-            return (readUint8(bytes, offset) shl 8) or
-                    //
-                    readUint8(bytes, offset + 1)
+        private fun ByteBuffer.readUint32(): UInt {
+            return this.int.toUInt()
         }
 
         /**
-         * 从字节数组中解析大端序的32位无符号整数
-         * @param bytes 字节数组
-         * @param offset 起始偏移量
-         * @return 解析出的长整数 (0-4294967295)
+         * 从 buffer 中读取接下来的 8 个字节，并解析为 64 位无符号整数
+         * @return 解析出的整数 (0-0xFFFFFFFFFFFFFFFF)
          */
-        private fun readUint32(bytes: ByteArray, offset: Int = 0): Long {
-            return (readUint8(bytes, offset).toLong() shl 24) or
-                    //
-                    (readUint8(bytes, offset + 1).toLong() shl 16) or
-                    //
-                    (readUint8(bytes, offset + 2).toLong() shl 8) or
-                    //
-                    readUint8(bytes, offset + 3).toLong()
+        private fun ByteBuffer.readUint64(): ULong {
+            return this.long.toULong()
         }
 
-        /**
-         * 从字节数组中解析大端序的64位无符号整数
-         * @param bytes 字节数组
-         * @param offset 起始偏移量
-         * @return 解析出的长整数 (注意：对于超大数可能被解析为负数)
-         */
-        private fun readUint64(bytes: ByteArray, offset: Int = 0): Long {
-            return (readUint8(bytes, offset).toLong() shl 56) or
-                    //
-                    (readUint8(bytes, offset + 1).toLong() shl 48) or
-                    //
-                    (readUint8(bytes, offset + 2).toLong() shl 40) or
-                    //
-                    (readUint8(bytes, offset + 3).toLong() shl 32) or
-                    //
-                    (readUint8(bytes, offset + 4).toLong() shl 24) or
-                    //
-                    (readUint8(bytes, offset + 5).toLong() shl 16) or
-                    //
-                    (readUint8(bytes, offset + 6).toLong() shl 8) or
-                    //
-                    readUint8(bytes, offset + 7).toLong()
+        private fun FileChannel.mapWithOrder(position: Long, size: Long): MappedByteBuffer {
+            val buffer = this.map(
+                FileChannel.MapMode.READ_ONLY,
+                position,
+                size,
+            )
+
+            // .ffab 文件中的多字节整数都是按照大端序存储
+            buffer.order(ByteOrder.BIG_ENDIAN)
+            return buffer
         }
+
     }
 
     /**
@@ -145,6 +123,7 @@ class Ffab(private val ffabRawResId: Int) {
             val newConfiguration = context.resources.configuration
             if (mConfiguration.diff(newConfiguration) != 0) {
                 mConfiguration.setTo(newConfiguration)
+
                 prepareInner(context)
 
                 // 乐观逻辑：
@@ -159,70 +138,68 @@ class Ffab(private val ffabRawResId: Int) {
     }
 
     private fun prepareInner(context: Context) {
-        val afd = context.resources.openRawResourceFd(ffabRawResId)
-        try {
-            prepareInner(context, afd)
-        } finally {
-            afd.close()
+        context.resources.openRawResourceFd(ffabRawResId).use { afd ->
+            afd.createInputStream().use { stream ->
+                stream.channel.use { channel ->
+                    prepareInner(channel)
+                }
+            }
         }
     }
 
-    private fun prepareInner(context: Context, afd: AssetFileDescriptor) {
-        val inputStream = context.resources.openRawResource(ffabRawResId)
-        try {
-            // 读取文件头 (4字节)：FFAB_MAGIC (0xFFAB) + 版本号(0x0001)
-            val header = ByteArray(4)
-            inputStream.read(header)
+    private fun prepareInner(channel: FileChannel) {
+        // 一次性读取文件头（4字节）与 Meta 信息 (8字节)
+        val headerMetaBuffer = channel.mapWithOrder(
+            position = 0,
+            size = 12,
+        )
 
-            // 验证魔数和版本号
-            val magic = readUint16(header, 0)
-            val version = readUint16(header, 2)
+        // 文件头 (4字节)：FFAB_MAGIC (0xFFAB) + 版本号(0x0001)
+        // 验证魔数和版本号
+        val magic = headerMetaBuffer.readUint16().toInt()
+        val version = headerMetaBuffer.readUint16().toInt()
 
-            if (magic != FFAB_MAGIC || version != FFAB_VERSION_0x0001) {
-                // 当前仅支持解析版本1(0x0001)
-                throw IllegalArgumentException("Invalid FFAB file format")
-            }
-
-            // 读取Meta信息区 (8字节): 图片数量(2字节) + 图片宽度(2字节) + 图片高度(2字节) + ASTC格式代码(2字节)
-            val metaInfo = ByteArray(8)
-            inputStream.read(metaInfo)
-
-            val imageCount = readUint16(metaInfo, 0)
-            val width = readUint16(metaInfo, 2)
-            val height = readUint16(metaInfo, 4)
-            val formatCode = readUint16(metaInfo, 6)
-
-            // 获取ASTC块大小
-            val format = CODE_TO_ASTC_BLOCK[formatCode]
-                ?: throw IllegalArgumentException("Invalid format code: $formatCode")
-
-            // 读取索引表 (每项12字节)
-            val frameIndexList = mutableListOf<FrameIndex>()
-            val indexTableSize = imageCount * 12
-            val indexTable = ByteArray(indexTableSize)
-            inputStream.read(indexTable)
-
-            for (i in 0 until imageCount) {
-                val offsetIndex = i * 12
-                val offset = readUint64(indexTable, offsetIndex)
-                val dataLength = readUint32(indexTable, offsetIndex + 8)
-
-                frameIndexList.add(FrameIndex(offset, dataLength))
-            }
-
-            // 创建FfabInfo对象
-            mInfo = FfabInfo(
-                version = version,
-                imageCount = imageCount,
-                width = width,
-                height = height,
-                format = format,
-                formatCode = formatCode,
-                frameIndexList = frameIndexList,
-            )
-        } finally {
-            inputStream.close()
+        if (magic != FFAB_MAGIC || version != FFAB_VERSION_0X0001) {
+            // 当前仅支持解析版本1(0x0001)
+            throw IllegalArgumentException("Invalid FFAB file format")
         }
+
+        // Meta信息区 (8字节): 图片数量(2字节) + 图片宽度(2字节) + 图片高度(2字节) + ASTC格式代码(2字节)
+        val imageCount = headerMetaBuffer.readUint16().toInt()
+        val width = headerMetaBuffer.readUint16().toInt()
+        val height = headerMetaBuffer.readUint16().toInt()
+        val formatCode = headerMetaBuffer.readUint16().toInt()
+
+        // 获取ASTC块大小
+        val format = CODE_TO_ASTC_BLOCK[formatCode]
+            ?: throw IllegalArgumentException("Invalid format code: $formatCode")
+
+        // 读取索引表 (每项12字节)
+        val frameIndexList = mutableListOf<FrameIndex>()
+        val indexTableSize = imageCount * 12
+        val indexTableBuffer = channel.mapWithOrder(
+            position = 12L, // 索引表偏移量(文件头4字节 + Meta信息8字节)
+            size = indexTableSize.toLong(),
+        )
+
+        for (i in 0 until imageCount) {
+            // 依次读取每一个图片的偏移量（8字节）和数据长度（4字节）
+            val offset = indexTableBuffer.readUint64().toLong()
+            val dataLength = indexTableBuffer.readUint32().toLong()
+
+            frameIndexList.add(FrameIndex(offset, dataLength))
+        }
+
+        // 创建FfabInfo对象
+        mInfo = FfabInfo(
+            version = version,
+            imageCount = imageCount,
+            width = width,
+            height = height,
+            format = format,
+            formatCode = formatCode,
+            frameIndexList = frameIndexList,
+        )
     }
 
 }
