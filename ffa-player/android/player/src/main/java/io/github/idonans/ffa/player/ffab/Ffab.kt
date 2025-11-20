@@ -69,10 +69,10 @@ class Ffab(private val ffabRawResId: Int) {
             return this.long.toULong()
         }
 
-        private fun FileChannel.mapWithOrder(position: Long, size: Long): MappedByteBuffer {
+        private fun FileChannel.mapWithOrder(positionOffset: Long, size: Long): MappedByteBuffer {
             val buffer = this.map(
                 FileChannel.MapMode.READ_ONLY,
-                position,
+                this.position() + positionOffset,
                 size,
             )
 
@@ -150,7 +150,7 @@ class Ffab(private val ffabRawResId: Int) {
     private fun prepareInner(channel: FileChannel) {
         // 一次性读取文件头（4字节）与 Meta 信息 (8字节)
         val headerMetaBuffer = channel.mapWithOrder(
-            position = 0,
+            positionOffset = 0,
             size = 12,
         )
 
@@ -159,9 +159,13 @@ class Ffab(private val ffabRawResId: Int) {
         val magic = headerMetaBuffer.readUint16().toInt()
         val version = headerMetaBuffer.readUint16().toInt()
 
-        if (magic != FFAB_MAGIC || version != FFAB_VERSION_0X0001) {
+        if (magic != FFAB_MAGIC) {
+            throw IllegalArgumentException("Invalid FFAB file format, magic: $magic, expected: $FFAB_MAGIC")
+        }
+
+        if (version != FFAB_VERSION_0X0001) {
             // 当前仅支持解析版本1(0x0001)
-            throw IllegalArgumentException("Invalid FFAB file format")
+            throw IllegalArgumentException("Invalid FFAB file format, version: $version, expected: $FFAB_VERSION_0X0001")
         }
 
         // Meta信息区 (8字节): 图片数量(2字节) + 图片宽度(2字节) + 图片高度(2字节) + ASTC格式代码(2字节)
@@ -178,7 +182,7 @@ class Ffab(private val ffabRawResId: Int) {
         val frameIndexList = mutableListOf<FrameIndex>()
         val indexTableSize = imageCount * 12
         val indexTableBuffer = channel.mapWithOrder(
-            position = 12L, // 索引表偏移量(文件头4字节 + Meta信息8字节)
+            positionOffset = 12L, // 索引表偏移量(文件头4字节 + Meta信息8字节)
             size = indexTableSize.toLong(),
         )
 
