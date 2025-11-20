@@ -118,7 +118,7 @@ class Ffab(private val ffabRawResId: Int) {
      * 按需从 ffabRawResId 解析 ffab 文件内容。
      * 如果没有解析过，或者 Configuration 发生了变化，则重新解析 ffab 文件
      */
-    private fun prepare(context: Context) {
+    fun prepare(context: Context) {
         synchronized(mConfiguration) {
             val newConfiguration = context.resources.configuration
             if (mConfiguration.diff(newConfiguration) != 0) {
