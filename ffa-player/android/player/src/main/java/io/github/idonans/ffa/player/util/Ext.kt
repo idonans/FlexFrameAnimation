@@ -7,7 +7,7 @@ import kotlin.contracts.contract
 import kotlin.system.measureNanoTime
 
 @OptIn(ExperimentalContracts::class)
-fun measureTimeIfDebug(description: String? = null, block: () -> Unit) {
+fun measureTimeIfDebug(lazyDescription: () -> String? = { null }, block: () -> Unit) {
     contract {
         callsInPlace(block, InvocationKind.EXACTLY_ONCE)
     }
@@ -15,7 +15,7 @@ fun measureTimeIfDebug(description: String? = null, block: () -> Unit) {
     if (Debug.enable) {
         measureNanoTime { block() }.also { time ->
             LogUtil.d {
-                "$description duration:${time}ns(${time / 1_000_000}ms)"
+                "${lazyDescription()} duration:${time}ns(${time / 1_000_000}ms)"
             }
         }
     } else {

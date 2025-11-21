@@ -73,11 +73,15 @@ class Ffab(private val ffabRawResId: Int) {
         }
 
         private fun FileChannel.mapWithOrder(positionOffset: Long, size: Long): MappedByteBuffer {
-            val buffer = this.map(
-                FileChannel.MapMode.READ_ONLY,
-                this.position() + positionOffset,
-                size,
-            )
+            val buffer: MappedByteBuffer
+
+            measureTimeIfDebug({ "mapWithOrder ps[$positionOffset, $size]" }) {
+                buffer = this.map(
+                    FileChannel.MapMode.READ_ONLY,
+                    this.position() + positionOffset,
+                    size,
+                )
+            }
 
             // .ffab 文件中的多字节整数都是按照大端序存储
             buffer.order(ByteOrder.BIG_ENDIAN)
@@ -142,22 +146,22 @@ class Ffab(private val ffabRawResId: Int) {
 
     private fun prepareInner(context: Context) {
         val afd: AssetFileDescriptor
-        measureTimeIfDebug("prepareInner openRawResourceFd") {
+        measureTimeIfDebug({ "prepareInner openRawResourceFd" }) {
             afd = context.resources.openRawResourceFd(ffabRawResId)
         }
 
         afd.use { afd ->
             val stream: FileInputStream
-            measureTimeIfDebug("prepareInner createInputStream") {
+            measureTimeIfDebug({ "prepareInner createInputStream" }) {
                 stream = afd.createInputStream()
             }
             stream.use { stream ->
                 val channel: FileChannel
-                measureTimeIfDebug("prepareInner get channel") {
+                measureTimeIfDebug({ "prepareInner get channel" }) {
                     channel = stream.channel
                 }
                 channel.use { channel ->
-                    measureTimeIfDebug("prepareInner from channel") {
+                    measureTimeIfDebug({ "prepareInner from channel" }) {
                         prepareInner(channel)
                     }
                 }
