@@ -1,7 +1,10 @@
 package io.github.idonans.ffa.player.ffab
 
 import android.content.Context
+import android.content.res.AssetFileDescriptor
 import android.content.res.Configuration
+import io.github.idonans.ffa.player.util.measureTimeIfDebug
+import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.MappedByteBuffer
@@ -138,10 +141,25 @@ class Ffab(private val ffabRawResId: Int) {
     }
 
     private fun prepareInner(context: Context) {
-        context.resources.openRawResourceFd(ffabRawResId).use { afd ->
-            afd.createInputStream().use { stream ->
-                stream.channel.use { channel ->
-                    prepareInner(channel)
+        val afd: AssetFileDescriptor
+        measureTimeIfDebug("prepareInner openRawResourceFd") {
+            afd = context.resources.openRawResourceFd(ffabRawResId)
+        }
+
+        afd.use { afd ->
+            val stream: FileInputStream
+            measureTimeIfDebug("prepareInner createInputStream") {
+                stream = afd.createInputStream()
+            }
+            stream.use { stream ->
+                val channel: FileChannel
+                measureTimeIfDebug("prepareInner get channel") {
+                    channel = stream.channel
+                }
+                channel.use { channel ->
+                    measureTimeIfDebug("prepareInner from channel") {
+                        prepareInner(channel)
+                    }
                 }
             }
         }
