@@ -1,7 +1,6 @@
 package io.github.idonans.ffa.example.ui.main
 
 import android.os.Bundle
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -9,6 +8,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import io.github.idonans.ffa.example.R
 import io.github.idonans.ffa.player.ffab.Ffab
+import io.github.idonans.ffa.player.util.LogUtil
 
 class MainFragment : Fragment() {
 
@@ -27,13 +27,24 @@ class MainFragment : Fragment() {
 
         val ffab = Ffab(ffabRawResId = R.raw.animation)
         ffab.prepare(requireContext())
-        Log.i(mObjectTag, "ffab info: ${ffab.getInfo()}")
+        LogUtil.i {
+            "$mObjectTag ffab info: ${ffab.getInfo()}"
+        }
     }
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View {
         return inflater.inflate(R.layout.fragment_main, container, false)
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        val finishView = view.findViewById<View>(R.id.finish)
+        finishView.setOnClickListener {
+            requireActivity().finish()
+        }
     }
 
 }
