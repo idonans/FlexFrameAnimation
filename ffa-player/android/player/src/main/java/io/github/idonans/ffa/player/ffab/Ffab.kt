@@ -1,10 +1,8 @@
 package io.github.idonans.ffa.player.ffab
 
 import android.content.Context
-import android.content.res.AssetFileDescriptor
 import android.content.res.Configuration
 import io.github.idonans.ffa.player.util.measureTimeIfDebug
-import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.MappedByteBuffer
@@ -73,15 +71,11 @@ class Ffab(private val ffabRawResId: Int) {
         }
 
         private fun FileChannel.mapWithOrder(positionOffset: Long, size: Long): MappedByteBuffer {
-            val buffer: MappedByteBuffer
-
-            measureTimeIfDebug({ "mapWithOrder ps[$positionOffset, $size]" }) {
-                buffer = this.map(
-                    FileChannel.MapMode.READ_ONLY,
-                    this.position() + positionOffset,
-                    size,
-                )
-            }
+            val buffer = this.map(
+                FileChannel.MapMode.READ_ONLY,
+                this.position() + positionOffset,
+                size,
+            )
 
             // .ffab 文件中的多字节整数都是按照大端序存储
             buffer.order(ByteOrder.BIG_ENDIAN)
@@ -125,13 +119,18 @@ class Ffab(private val ffabRawResId: Int) {
      * 按需从 ffabRawResId 解析 ffab 文件内容。
      * 如果没有解析过，或者 Configuration 发生了变化，则重新解析 ffab 文件
      */
+    @OptIn(ExperimentalStdlibApi::class)
     fun prepare(context: Context) {
         synchronized(mConfiguration) {
             val newConfiguration = context.resources.configuration
             if (mConfiguration.diff(newConfiguration) != 0) {
                 mConfiguration.setTo(newConfiguration)
 
-                prepareInner(context)
+                measureTimeIfDebug(
+                    { "prepareInner ${ffabRawResId.toHexString()}" },
+                ) {
+                    prepareInner(context)
+                }
 
                 // 乐观逻辑：
                 // 如果在解析结束后 configuration 发生了变化，则本次不再重新解析。
@@ -145,25 +144,10 @@ class Ffab(private val ffabRawResId: Int) {
     }
 
     private fun prepareInner(context: Context) {
-        val afd: AssetFileDescriptor
-        measureTimeIfDebug({ "prepareInner openRawResourceFd" }) {
-            afd = context.resources.openRawResourceFd(ffabRawResId)
-        }
-
-        afd.use { afd ->
-            val stream: FileInputStream
-            measureTimeIfDebug({ "prepareInner createInputStream" }) {
-                stream = afd.createInputStream()
-            }
-            stream.use { stream ->
-                val channel: FileChannel
-                measureTimeIfDebug({ "prepareInner get channel" }) {
-                    channel = stream.channel
-                }
-                channel.use { channel ->
-                    measureTimeIfDebug({ "prepareInner from channel" }) {
-                        prepareInner(channel)
-                    }
+        context.resources.openRawResourceFd(ffabRawResId).use { afd ->
+            afd.createInputStream().use { stream ->
+                stream.channel.use { channel ->
+                    prepareInner(channel)
                 }
             }
         }
@@ -201,7 +185,7 @@ class Ffab(private val ffabRawResId: Int) {
             ?: throw IllegalArgumentException("Invalid format code: $formatCode")
 
         // 读取索引表 (每项12字节)
-        val frameIndexList = mutableListOf<FrameIndex>()
+        val frameIndexList = ArrayList<FrameIndex>(imageCount)
         val indexTableSize = imageCount * 12
         val indexTableBuffer = channel.mapWithOrder(
             positionOffset = 12L, // 索引表偏移量(文件头4字节 + Meta信息8字节)
