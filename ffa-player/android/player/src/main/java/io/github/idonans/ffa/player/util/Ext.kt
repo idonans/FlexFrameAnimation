@@ -7,8 +7,8 @@ import kotlin.contracts.contract
 import kotlin.system.measureNanoTime
 
 @OptIn(ExperimentalContracts::class)
-inline fun measureTimeIfDebug(
-    crossinline lazyDescription: () -> String? = { null }, block: () -> Unit
+fun measureTimeIfDebug(
+    lazyDescription: () -> String? = { null }, block: () -> Unit
 ) {
     contract {
         callsInPlace(block, InvocationKind.EXACTLY_ONCE)

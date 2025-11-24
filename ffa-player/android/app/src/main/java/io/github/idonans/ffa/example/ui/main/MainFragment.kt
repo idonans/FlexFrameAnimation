@@ -26,9 +26,9 @@ class MainFragment : Fragment() {
         super.onCreate(savedInstanceState)
 
         val ffab = Ffab(ffabRawResId = R.raw.animation)
-        ffab.prepare(requireContext())
+        val ffabInfo = ffab.getInfo(requireContext())
         LogUtil.i {
-            "$mObjectTag ffab info: ${ffab.getInfo()}"
+            "$mObjectTag ffab info: $ffabInfo"
         }
     }
 
