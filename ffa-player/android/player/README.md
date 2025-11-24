@@ -23,6 +23,9 @@ FlexFrameLayerGroup 可以嵌套，类似 Android View 树。
 动画渲染线程支持提前初始化，即：动画渲染线程的运行不依赖动画视图的创建。
 动画渲染线程称之为 FlexFrameRenderThread, 同时，这也是一个 OpenGL 线程。
 
+## 动画时间
+所有动画时间相关的值都基于 SystemClock.uptimeMillis() 计算。此值不受系统休眠时间影响，不受系统显示时间变更的影响。
+
 ## 技术方案
 
 - OpenGL ES 3.2+

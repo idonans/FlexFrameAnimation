@@ -13,32 +13,32 @@ object LogUtil {
         return Log.getStackTraceString(throwable)
     }
 
-    fun v(lazyMessage: () -> String?) {
+    fun v(lazyMessage: () -> Any?) {
         this.println(level = Log.VERBOSE, lazyMessage = lazyMessage)
     }
 
-    fun d(lazyMessage: () -> String?) {
+    fun d(lazyMessage: () -> Any?) {
         this.println(level = Log.DEBUG, lazyMessage = lazyMessage)
     }
 
-    fun i(lazyMessage: () -> String?) {
+    fun i(lazyMessage: () -> Any?) {
         this.println(level = Log.INFO, lazyMessage = lazyMessage)
     }
 
-    fun w(lazyMessage: () -> String?) {
+    fun w(lazyMessage: () -> Any?) {
         this.println(level = Log.WARN, lazyMessage = lazyMessage)
     }
 
-    fun e(lazyMessage: () -> String?) {
+    fun e(lazyMessage: () -> Any?) {
         this.println(level = Log.ERROR, lazyMessage = lazyMessage)
     }
 
-    private fun println(tag: String = TAG, level: Int, lazyMessage: () -> String?) {
+    private fun println(tag: String = TAG, level: Int, lazyMessage: () -> Any?) {
         if (Log.isLoggable(tag, level).not()) {
             return
         }
 
-        Log.println(level, tag, lazyMessage() ?: "")
+        Log.println(level, tag, lazyMessage()?.toString() ?: "")
     }
 
 }
