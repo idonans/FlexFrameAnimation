@@ -106,8 +106,44 @@ class Ffab(private val ffabRawResId: Int) {
             val height: Int,
             val format: Pair<Int, Int>,
             val formatCode: Int,
-            val frameIndexList: List<FrameIndex>,
-        )
+        ) {
+            private lateinit var mFrameIndexList: List<FrameIndex>
+            private lateinit var mFrameDataBuffer: ByteBuffer
+
+            constructor(
+                version: Int,
+                imageCount: Int,
+                width: Int,
+                height: Int,
+                format: Pair<Int, Int>,
+                formatCode: Int,
+                mFrameIndexList: List<FrameIndex>,
+                mFrameDataBuffer: ByteBuffer,
+            ) : this(version, imageCount, width, height, format, formatCode) {
+                this.mFrameIndexList = mFrameIndexList
+                this.mFrameDataBuffer = mFrameDataBuffer
+            }
+
+            /**
+             * 序列帧的帧数
+             */
+            fun frameCount() = this.mFrameIndexList.size
+
+            /**
+             * 获取指定帧的内容
+             */
+            fun frameData(index: Int): ByteBuffer {
+                val frameIndex = this.mFrameIndexList[index]
+                // 创建原始缓冲区的副本，以避免影响原始缓冲区的状态
+                val buffer = this.mFrameDataBuffer.duplicate()
+                // 设置位置和限制来创建一个"切片"
+                buffer.position(frameIndex.offset.toInt())
+                buffer.limit(frameIndex.offset.toInt() + frameIndex.dataLength.toInt())
+                // 创建切片
+                return buffer.slice()
+            }
+
+        }
 
         /**
          * 从指定 context 上下文中解析目标 raw `.ffab` 文件内容，内部会充分复用缓存，仅在必要时才重新解析文件内容
@@ -117,7 +153,6 @@ class Ffab(private val ffabRawResId: Int) {
                 return prepareL(ffabRawResId, context)
             }
         }
-
 
         /**
          * 按需从 ffabRawResId 解析 ffab 文件内容。
@@ -209,6 +244,16 @@ class Ffab(private val ffabRawResId: Int) {
                 frameIndexList.add(FrameIndex(offset, dataLength))
             }
 
+            // 读取全部图片帧数据
+            val frameDataBuffer = channel.mapWithOrder(
+                // 索引表偏移量(文件头4字节 + Meta信息8字节) + 索引表大小
+                positionOffset = 12L + indexTableSize.toLong(),
+                // size 为最后一张图片的偏移量 + 数据长度
+                size = frameIndexList.last().let { lastFrameIndex ->
+                    lastFrameIndex.offset + lastFrameIndex.dataLength
+                },
+            )
+
             // 创建FfabInfo对象
             return FfabInfo(
                 version = version,
@@ -217,7 +262,8 @@ class Ffab(private val ffabRawResId: Int) {
                 height = height,
                 format = format,
                 formatCode = formatCode,
-                frameIndexList = frameIndexList,
+                mFrameIndexList = frameIndexList,
+                mFrameDataBuffer = frameDataBuffer,
             )
         }
     }
