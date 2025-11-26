@@ -169,6 +169,7 @@ class Ffab(private val ffabRawResId: Int) {
             return ffabInfo
         }
 
+        @OptIn(ExperimentalStdlibApi::class)
         private fun prepareInner(ffabRawResId: Int, context: Context): FfabInfo {
             context.resources.openRawResourceFd(ffabRawResId).use { afd ->
                 val resourcesOffset = afd.startOffset
@@ -176,6 +177,12 @@ class Ffab(private val ffabRawResId: Int) {
                 if (cache != null) {
                     // 命中缓存
                     return cache
+                }
+
+                LogUtil.d {
+                    "prepareInner ffabRawResId:${ffabRawResId.toHexString()}," +
+                            //
+                            " resourcesOffset:$resourcesOffset"
                 }
 
                 afd.createInputStream().use { stream ->

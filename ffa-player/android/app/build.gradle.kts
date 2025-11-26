@@ -26,10 +26,17 @@ android {
             )
         }
     }
+
+    // 配置 ffab 文件不能被压缩
+    aaptOptions {
+        noCompress("ffab")
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
     kotlinOptions {
         jvmTarget = "11"
     }

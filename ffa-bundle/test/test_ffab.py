@@ -35,8 +35,8 @@ EXTRACT_FRAMES_FPS = 24
 # 测试 ASTC 格式列表
 ASTC_FORMATS = ['4x4', '6x6', '8x8', '12x12']
 
-# 测试压缩质量
-ASTC_QUALITY = 100.0
+# 测试压缩质量 [0.0-100.0]
+ASTC_QUALITY = 10.0
 
 def run_command(command, cwd=None):
     """运行命令并返回结果"""
