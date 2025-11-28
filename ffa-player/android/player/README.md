@@ -8,7 +8,7 @@
 FlexFrameLayer 的内容包括：
 - 关联的动画资源文件 `.ffab`
 - 位置信息（如在视图中的坐标）
-- 动画播放参数（如播放速度、循环次数等）
+- 动画播放参数（如播放速度）
 - 动画播放状态 PlayState
 
 每一个 FlexFrameLayer 都可以关联一个单独的 PlayState, 如果关联的 PlayState 为 null, 则会\

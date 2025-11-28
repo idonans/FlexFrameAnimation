@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 帧动画配置 -->
+    <declare-styleable name="FlexFrameLayer">
+        <!-- 可通过 R.raw 引用的帧动画 `.ffab` 资源文件 -->
+        <attr name="flexFrameAnimationRawRes" format="reference" />
+        <!-- 帧动画的播放帧率（每秒播放的帧数） -->
+        <attr name="flexFrameAnimationRate" format="float|reference" />
+        <attr name="android:start" />
+        <attr name="android:top" />
+        <attr name="android:end" />
+        <attr name="android:bottom" />
+        <attr name="android:startDelay" />
+        <attr name="android:duration" />
+        <attr name="android:repeatCount" />
+        <!-- repeat count 结束之后是否保持绘制最后一帧 -->
+        <attr name="animFrameDrawLastFrameAfterRepeatEnd" format="boolean" />
+        <!-- 帧数太多的动画建议设置为 true，即解码的帧图片不写入内存缓存 -->
+        <attr name="animFrameNoCache" format="boolean" />
+    </declare-styleable>
+    <!-- 自定义 SurfaceView -->
+    <declare-styleable name="AnimFrameSurfaceView">
+        <attr name="surfaceBackground" format="color|reference" />
+    </declare-styleable>
+</resources>
