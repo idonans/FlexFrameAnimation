@@ -104,18 +104,18 @@ class PlayState {
     }
 
     /**
-     * 动画的实际执行时长（不包括 sleep 时间），单位毫秒
+     * 动画的实际执行时长（不包括 sleep 时间），单位毫秒. 如果动画尚未开始或未达到开始时间，返回 -1
      */
     fun uptimeRunning(): Long = doWithLock {
         if (mStartTime <= 0L) {
             // 动画尚未开始
-            return 0L
+            return -1L
         }
 
         var uptimeRunning = SystemClock.uptimeMillis() - mStartTime + mStartTimeOffset
         if (uptimeRunning < 0L) {
             // 动画尚未到达开始时间，这通常是因为设置了值为负数的 mStartTimeOffset
-            return 0L
+            return -1L
         }
 
         // 减去 sleep 时间
@@ -130,10 +130,9 @@ class PlayState {
             }
         }
 
-        require(uptimeRunning >= 0L) {
-            "$mObjectTag uptimeRunning:$uptimeRunning, mStartTime:$mStartTime," +
-                    //
-                    " mSleepTimeTotal:$mSleepTimeTotal, mSleepTimeStart:$mSleepTimeStart"
+        if (uptimeRunning < 0L) {
+            // 动画尚未开始
+            return -1L
         }
 
         return uptimeRunning

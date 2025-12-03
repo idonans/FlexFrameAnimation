@@ -42,7 +42,7 @@ open class FlexFrameLayer {
     var height: Float = 0f
 
     /**
-     * 帧率，每秒钟播放的帧数量
+     * 帧率，每秒钟播放的帧数量。当帧率为负数或 0 时，不会渲染任何内容。
      */
     var rate: Float = 0f
 
@@ -59,30 +59,23 @@ open class FlexFrameLayer {
     val fillEnd: Boolean = false
 
     /**
-     * 动画的循环次数。当值不大于0时，表示无限循环播放。当值大于0时，表示至多循环播放目标次数。
-     * 逻辑优先级：visibleDuration > duration > repeatCount
-     * @see visibleDuration
-     * @see duration
-     */
-    val repeatCount: Int = 0
-
-    /**
      * 动画的可运行时间长度。当此值非负时（大于或等于0）, 且动画的 uptimeRunning 超过了此时间，则基于此时间计算
      * frameIndexToDraw, 即：动画运行时间的逻辑值为 max(uptimeRunning, duration)。
      * 该值会影响 fillEnd 的效果，即 fillEnd 保持绘制的最后一帧是此时计算出来的 frameIndexToDraw, 而不是
      * ffab 文件中的序列帧的最后一张图片。
-     * 逻辑优先级：visibleDuration > duration > repeatCount
+     * 在 duration 范围内，帧动画是循环的从第一帧播放到最后一帧。
+     * 结合 duration、rate，可以实现控制动画的循环播放次数的效果。
      * @see visibleDuration
-     * @see repeatCount
      */
     val duration: Long = -1L
 
     /**
      * 动画的可见时间长度。当此值非负时（大于或等于0），且动画的 uptimeRunning 超过了此时间，则不会绘制当前内容。
      * 即使 fillStart, fillEnd 被设置为 true, 也不会绘制内容。
-     * 逻辑优先级：visibleDuration > duration > repeatCount
+     * 当此值为 0 时，表示动画总是不可见，即不会绘制任何内容。
+     * 当此值为负值时，表示动画总是可见的。
+     * 当 visibleDuration 超过 duration，且 fillEnd 为 true, 帧动画会固定绘制 duration 时刻的帧。
      * @see duration
-     * @see repeatCount
      */
     val visibleDuration: Long = -1L
 
@@ -110,7 +103,18 @@ open class FlexFrameLayer {
             parentLayerDrawState = parentLayerDrawState,
         )
 
-        // TODO
+        if (mLayerFrameState.frameIndexToDraw == null) {
+            // 不渲染任何内容
+            return
+        }
+
+        // 绘制 mLayerFrameState.frameIndexToDraw 指向的帧
+        mLayerFrameState.ffabInfo!!.frameData(
+            //
+            mLayerFrameState.frameIndexToDraw!!
+        ).also { frameData ->
+            // TODO 绘制 frameData
+        }
     }
 
     /**

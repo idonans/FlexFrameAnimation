@@ -36,7 +36,7 @@ class PlayStateTest {
 
         // 验证初始状态
         Assert.assertFalse("Initial state should not be running", playState.isRunning())
-        Assert.assertEquals("Initial uptime should be 0", 0L, playState.uptimeRunning())
+        Assert.assertEquals("Initial uptime should be -1", -1L, playState.uptimeRunning())
     }
 
     @Test
@@ -110,7 +110,23 @@ class PlayStateTest {
         // 验证状态
         Assert.assertTrue("Should be running after start", playState.isRunning())
         Assert.assertEquals(
-            "Uptime should be 0 with negative offset", 0L, playState.uptimeRunning()
+            "Uptime should be -1 with negative offset",
+            -1L,
+            playState.uptimeRunning(),
+        )
+
+        // 模拟时间流逝
+        mCurrentTime += 500L
+        Assert.assertTrue(
+            "Uptime should be 0 after negative offset",
+            playState.uptimeRunning() == 0L,
+        )
+
+        // 模拟时间流逝
+        mCurrentTime += 100L
+        Assert.assertTrue(
+            "Uptime should be 100 with time pass",
+            playState.uptimeRunning() == 100L,
         )
     }
 
@@ -128,7 +144,7 @@ class PlayStateTest {
 
         // 验证状态
         Assert.assertFalse("Should not be running after stop", playState.isRunning())
-        Assert.assertEquals("Uptime should be 0 after reset stop", 0L, playState.uptimeRunning())
+        Assert.assertEquals("Uptime should be -1 after reset stop", -1L, playState.uptimeRunning())
     }
 
     @Test
